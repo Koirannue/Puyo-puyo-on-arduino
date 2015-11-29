@@ -545,7 +545,43 @@ if number of same color is 4 or more
   return number of same array
 else return number of neighbors found
 */
-int scan(int x, int y, int sum) {
+int scan(int x, int y) {
+  int delx[20], dely[20], arox[20], aroy[20]; //Delete arrays and neighbor arrays
+  int delpos = 0, aropos = 0; //Index of the arrays
+  int color = test.checkpoint(x, y);  //Store the color
+  if (color == test.checkup(x, y)) { arox[aropos] = x; aroy[aropos] = y-1; aropos++; }    //Check if the adjacent adjacent enighbor has
+  if (color == test.checkdown(x, y)) { arox[aropos] = x; aroy[aropos] = y+1; aropos++; }  //the same color or not. If it shares the color
+  if (color == test.checkleft(x, y)) { arox[aropos] = x-1; aroy[aropos] = y; aropos++; }  //then add it to the neighbor array and increase
+  if (color == test.checkright(x, y)) { arox[aropos] = x+1; aroy[aropos] = y; aropos++; } //the neighbor array size by one
+  if (aropos == 0) { return 1; } //No neighbors were found, rip
+  delx[delpos] = x; dely[delpos] = y; //Neighbors were found, add current coord to delete array
+  delpos++; //Increase delete array size by one
+  test.setpoint(x, y, -1);  //Set current point to -1 flag
+  while (aropos > 0) {
+    x = arox[aropos - 1]; y = aroy[aropos - 1]; //Change coord to last item in neighbor array
+    aropos--; //"pop" the coord out of the neighbor array so other neighbors can overwrite it
+    if (color == test.checkup(x, y)) { arox[aropos] = x; aroy[aropos] = y-1; aropos++; }
+    if (color == test.checkdown(x, y)) { arox[aropos] = x; aroy[aropos] = y+1; aropos++; }
+    if (color == test.checkleft(x, y)) { arox[aropos] = x-1; aroy[aropos] = y; aropos++; }
+    if (color == test.checkright(x, y)) { arox[aropos] = x+1; aroy[aropos] = y; aropos++; }
+    delx[delpos] = x; dely[delpos] = y; //Neighbors were found, add current coord to delete array
+    delpos++; //Increase delete array size by one
+    test.setpoint(x, y, -1);  //Set current point to -1 flag
+  }
+  if (delpos < 4) { //Not enough neighbors were found
+    for (int i = 0; i < delpos; i++) {
+      test.setpoint(delx[i], dely[i], color); //Reset color to what it was before
+    }
+  }
+  else {  //Enough neighbors were found
+    for (int i = 0; i < delpos; i++) {
+      test.setpoint(delx[i], dely[i], 0); //Set them to 0 to erase them
+    }
+  }
+  return delpos;  //The size of this is the number of neighbors found?
+}
+
+/*int scan(int x, int y, int sum) {
   sum++;
   int c = test.checkpoint(x, y);
   test.setpoint(x, y, -1);
@@ -580,7 +616,7 @@ void erase(int x, int y) {
     //erase(x+1, y);
   }
 }
-
+*/
 bool fallable() {
   for (int j = HEIGHT - 1; j >= 0; j--) {
     for (int i = 0; i < WIDTH; i++) {
@@ -648,12 +684,11 @@ void Next() {
       for (int j = HEIGHT - 1; j >= 0; j--) {
         for (int i =0; i < WIDTH; i++) {
           if (test.checkpoint(i, j) != 0) {
-            count = scan(i, j, 0);
+            count = scan(i, j);
             if (count > 3) { //if there are 4 or more, incriment combo and do score stuff
               test.combofound = true;
               test.combo++;
               test.score = test.score + test.combo * count;
-              erase(i, j);
             }
           }
         }
@@ -690,4 +725,3 @@ void Next() {
   //drawmatrix();
   working = false;
 }
-
