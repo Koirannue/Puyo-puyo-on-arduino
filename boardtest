@@ -164,6 +164,7 @@ public:
   volatile bool puyodone = false; //puyo is done, signal a new one
   volatile bool freefalling = false;
   volatile bool combofound = false;
+  volatile bool gameover = false;
   board() {
     score = 0;
     for (int j = 0; j < HEIGHT; j++) {
@@ -182,6 +183,8 @@ public:
       drawpu();
     }
     else {
+      //Serial.print("Gameover\n");
+      gameover = true;
       Timer1.stop();
     }
   }
@@ -251,7 +254,7 @@ public:
   }
   //Function calls to move specific points
   void moveup(int x, int y) {
-    Serial.print("Moving up ");
+    /*Serial.print("Moving up ");
     Serial.print(x);
     Serial.print(",");
     Serial.print(y);
@@ -261,11 +264,11 @@ public:
     Serial.print(y-1);
     Serial.print(" containing ");
     Serial.print(checkpoint(x, y));
-    Serial.print("\n");
+    Serial.print("\n");*/
     swap(array[y][x], array[y-1][x]);
   }
   void movedown(int x, int y) {
-    Serial.print("Moving down ");
+    /*Serial.print("Moving down ");
     Serial.print(x);
     Serial.print(",");
     Serial.print(y);
@@ -275,11 +278,11 @@ public:
     Serial.print(y+1);
     Serial.print(" containing ");
     Serial.print(checkpoint(x, y));
-    Serial.print("\n");
+    Serial.print("\n");*/
     swap(array[y][x], array[y+1][x]);
   }
   void moveleft(int x, int y) {
-    Serial.print("Moving left ");
+    /*Serial.print("Moving left ");
     Serial.print(x);
     Serial.print(",");
     Serial.print(y);
@@ -289,11 +292,11 @@ public:
     Serial.print(y);
     Serial.print(" containing ");
     Serial.print(checkpoint(x, y));
-    Serial.print("\n");
+    Serial.print("\n");*/
     swap(array[y][x], array[y][x-1]);
   }
   void moveright(int x, int y) {
-    Serial.print("Moving right ");
+    /*Serial.print("Moving right ");
     Serial.print(x);
     Serial.print(",");
     Serial.print(y);
@@ -303,7 +306,7 @@ public:
     Serial.print(y);
     Serial.print(" containing ");
     Serial.print(checkpoint(x, y));
-    Serial.print("\n");
+    Serial.print("\n");*/
     swap(array[y][x], array[y][x+1]);
   }
   //Function calls to move pu around
@@ -372,7 +375,7 @@ public:
         pu.down();
       }
       else {
-        Serial.print("ouch\n");
+        //Serial.print("Hit a wall\n");
         puyodone = true;
         return -1;
       }
@@ -473,15 +476,15 @@ bool keepgoing = false;
 bool toggle = false;
 
 void setup() {
-  Serial.begin(9600);
+  //Serial.begin(9600);
   matrix.begin();
   //matrix.setBrightness(40);
   pinMode(13, OUTPUT);  
-  Timer1.initialize(1000000); // set a timer of length 1000000 microseconds (or 1 sec - or 1Hz)
+  Timer1.initialize(250000); // set a timer of length 1000000 microseconds (or 1 sec - or 1Hz)
   Timer1.attachInterrupt( Next ); // attach the service routine here
 }
 void loop() {
-  if (keepgoing == true && toggle) {
+  if (keepgoing == true && toggle && test.gameover == false) {
     while (working == true) {
     }
     Timer1.stop();
@@ -525,7 +528,6 @@ void drawmatrix() {
   }
   matrix.show();
 }
-//recursive function to scan through same colors
 /*New solution, recursion uses too much memory
 stick starting tile location in delete array
 check directions around
@@ -580,40 +582,41 @@ int scan(int x, int y) {
   }
   return delpos;  //The size of this is the number of neighbors found?
 }
-
+//recursive function to scan through same colors
 /*int scan(int x, int y, int sum) {
   sum++;
   int c = test.checkpoint(x, y);
   test.setpoint(x, y, -1);
   if (c == test.checkup(x, y)) {
-    //sum = sum + scan(x, y-1, sum);
+    sum = sum + scan(x, y-1, sum);
   }
   if (c == test.checkdown(x, y)) {
-    //sum = sum + scan(x, y+1, sum);
+    sum = sum + scan(x, y+1, sum);
   }
   if (c == test.checkleft(x, y)) {
-    //sum = sum + scan(x-1, y, sum);
+    sum = sum + scan(x-1, y, sum);
   }
   if (c == test.checkright(x, y)) {
-    //sum = sum + scan(x+1, y, sum);
+    sum = sum + scan(x+1, y, sum);
   }
   test.setpoint(x, y, c);
   return sum;
 }
+//Recursive function to erase the same ones found
 void erase(int x, int y) {
   test.setpoint(x, y, 0);
   int c = test.checkpoint(x, y);
   if (c == test.checkup(x, y)) {
-    //erase(x, y-1);
+    erase(x, y-1);
   }
   if (c == test.checkdown(x, y)) {
-    //erase(x, y+1);
+    erase(x, y+1);
   }
   if (c == test.checkleft(x, y)) {
-    //erase(x-1, y);
+    erase(x-1, y);
   }
   if (c == test.checkright(x, y)) {
-    //erase(x+1, y);
+    erase(x+1, y);
   }
 }
 */
@@ -621,30 +624,30 @@ bool fallable() {
   for (int j = HEIGHT - 1; j >= 0; j--) {
     for (int i = 0; i < WIDTH; i++) {
       if (test.checkpoint(i, j) != 0 && test.checkdown(i, j) == 0) {
-        Serial.print("fallable!!\n");
+        //Serial.print("falling!!\n");
         return true;
       }
     }
   }
-  Serial.print("nofall\n");
+  //Serial.print("falling done\n");
   return false;
 }
 
 void Next() {
+  //Serial.print("\n");
   working = true;
-  Serial.print("\n");
   drawmatrix();
-  Serial.print("loop: ");
+  /*Serial.print("loop: ");
   Serial.print(loopn);
-  loopn++;
   Serial.print("  puyodone = ");
   Serial.print(test.puyodone);
   Serial.print(" halfy = ");
   Serial.print(test.halfy);
-  Serial.print("\n");
+  Serial.print("\n");*/
+  loopn++;
   //Move puyo down
   if (test.puyodone == false && test.halfy == false) {
-    Serial.print(test.pu.rot);
+    /*Serial.print(test.pu.rot);
     Serial.print("\n");
     Serial.print(test.pu.x1);
     Serial.print(",");
@@ -659,7 +662,7 @@ void Next() {
     Serial.print(" ");
     Serial.print(test.pu.color2);    
     Serial.print(test.checkpoint(test.pu.x2, test.pu.y2));
-    Serial.print(" puyo 2\n");
+    Serial.print(" puyo 2\n");*/
     test.down();
   }
   //Move everything down by one step if possible starting from bottom row
@@ -697,13 +700,13 @@ void Next() {
         test.freefalling = true;
       }
       else {
-        Serial.print("Resetting...\n");    
+        //Serial.print("Resetting...\n");    
         if (toggle) {
-          Serial.print("Setting to false\n");
+          //Serial.print("Setting to false\n");
           toggle = false;
         }
         else {
-          Serial.print("Setting to true\n");
+          //Serial.print("Setting to true\n");
           toggle = true;
         }
         keepgoing = true;
