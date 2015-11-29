@@ -1,0 +1,693 @@
+#include <TimerOne.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_NeoMatrix.h>
+#include <Adafruit_NeoPixel.h>
+#ifndef PSTR
+ #define PSTR // Make Arduino Due happy
+#endif
+
+#define PIN 13
+#define mright 2
+#define WIDTH 6
+#define HEIGHT 12
+
+// MATRIX DECLARATION:
+// Parameter 1 = width of NeoPixel matrix
+// Parameter 2 = height of matrix
+// Parameter 3 = pin number (most are valid)
+// Parameter 4 = matrix layout flags, add together as needed:
+//   NEO_MATRIX_TOP, NEO_MATRIX_BOTTOM, NEO_MATRIX_LEFT, NEO_MATRIX_RIGHT:
+//     Position of the FIRST LED in the matrix; pick two, e.g.
+//     NEO_MATRIX_TOP + NEO_MATRIX_LEFT for the top-left corner.
+//   NEO_MATRIX_ROWS, NEO_MATRIX_COLUMNS: LEDs are arranged in horizontal
+//     rows or in vertical columns, respectively; pick one or the other.
+//   NEO_MATRIX_PROGRESSIVE, NEO_MATRIX_ZIGZAG: all rows/columns proceed
+//     in the same order, or alternate lines reverse direction; pick one.
+//   See example below for these values in action.
+// Parameter 5 = pixel type flags, add together as needed:
+//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
+//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
+//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
+
+
+// Example for NeoPixel Shield.  In this application we'd like to use it
+// as a 5x8 tall matrix, with the USB port positioned at the top of the
+// Arduino.  When held that way, the first pixel is at the top right, and
+// lines are arranged in columns, progressive order.  The shield uses
+// 800 KHz (v2) pixels that expect GRB color data.
+Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(WIDTH, HEIGHT, PIN,
+  NEO_MATRIX_TOP     + NEO_MATRIX_LEFT +
+  NEO_MATRIX_ROWS + NEO_MATRIX_PROGRESSIVE,
+  NEO_GRB            + NEO_KHZ800);
+
+
+const uint16_t colors[] = {
+  matrix.Color(100, 0, 0), matrix.Color(0, 100, 0), matrix.Color(0, 0, 100) };
+  
+volatile bool working = false;
+
+class puyo {
+public:
+  volatile int x1; //x axis of first puyo
+  volatile int y1; //y axis of first puyo
+  volatile int color1; //color of first puyo
+  volatile int x2; //x axis of second puyo
+  volatile int y2; //y axis of second puyo
+  volatile int color2; //color of second puyo
+  volatile char rot; //d = down r = right u = up l = left
+  puyo() {
+    x1 = WIDTH/2;
+    y1 = 0;
+    x2 = WIDTH/2;
+    y2 = 1;
+    rot = 'd';
+    color1 = random(1,4);
+    color2 = random(1,4);
+  }
+  void reset() {
+    x1 = WIDTH/2;
+    y1 = 0;
+    x2 = WIDTH/2;
+    y2 = 1;
+    rot = 'd';
+    color1 = random(1,4);
+    color2 = random(1,4);
+  }
+  //x and y can be any int
+  //rot can be 'd', 'r', 'l', 'u'
+  //color1 and color2 can be 'r', 'g', 'b'
+  puyo(int x, int y, char r, int c1, int c2) {
+    x1 = x;
+    y1 = y;
+    switch (r) {
+    case 'u':
+      x2 = x;
+      y2 = y - 1;
+      break;
+    case 'd':
+      x2 = x;
+      y2 = y+1;
+      break;
+    case 'l':
+      x2 = x - 1;
+      y2 = y;
+      break;
+    case 'r':
+      x2 = x + 1;
+      y2 = y;
+    }
+    rot = r;
+    color1 = c1;
+    color2 = c2;
+  }
+  void up() {
+    y1--;
+    y2--;
+  }
+  void down() {
+    y1++;
+    y2++;
+  }
+  void left() {
+    x1--;
+    x2--;
+  }
+  void right() {
+    x1++;
+    x2++;
+  }
+  void rotateleft() {
+    switch (rot) {
+    case 'u':
+      rot = 'l';
+      break;
+    case 'd':
+      rot = 'r';
+      break;
+    case 'l':
+      rot = 'd';
+      break;
+    case 'r':
+      rot = 'u';
+      break;
+    }
+  }
+  void rotateright() {
+    switch (rot) {
+    case 'u':
+      rot = 'r';
+      break;
+    case 'd':
+      rot = 'l';
+      break;
+    case 'l':
+      rot = 'u';
+      break;
+    case 'r':
+      rot = 'd';
+      break;
+    }
+  }
+};
+class board {
+private:
+  int array[HEIGHT][WIDTH];
+public:
+  volatile int score;
+  volatile int combo;
+  puyo pu;
+  volatile bool halfy; //half the puyo got stuck on a ledge lol
+  volatile int whichhalf; //first or second?
+  volatile int tempx; //x coord of free puyo
+  volatile int tempy; //y coord of free puyo
+  volatile bool puyodone = false; //puyo is done, signal a new one
+  volatile bool freefalling = false;
+  volatile bool combofound = false;
+  board() {
+    score = 0;
+    for (int j = 0; j < HEIGHT; j++) {
+      for (int i =0; i < WIDTH; i++) {
+        array[j][i] = 0;
+      }
+    }
+    newpuyo();
+  }
+  void newpuyo() {
+    if (checkpoint(WIDTH/2, 1) == 0) {
+      pu.reset();
+      combo = 0;
+      puyodone = false;
+      halfy = false;
+      drawpu();
+    }
+    else {
+      Timer1.stop();
+    }
+  }
+  void drawpu() {
+    setpoint(pu.x1, pu.y1, pu.color1);
+    setpoint(pu.x2, pu.y2, pu.color2);
+  }
+  void setpoint(int x, int y, char c) {
+    if (x < WIDTH && x >= 0 && y < HEIGHT && y >= 0) {
+      switch (c) {
+      case 'r':
+        array[y][x] = 1;
+        break;
+      case 'g':
+        array[y][x] = 2;
+        break;
+      case 'b':
+        array[y][x] = 3;
+        break;
+      default:
+        array[y][x] = 0;
+      }
+    }
+  }
+  void setpoint(int x, int y, int c) {
+    if (x < WIDTH && x >= 0 && y < HEIGHT && y >= 0) {
+      array[y][x] = c;
+      /*Serial.print("Setting ");
+      Serial.print(x);
+      Serial.print(",");
+      Serial.print(y);
+      Serial.print(" to ");
+      Serial.print(c);
+      Serial.print("\n");*/
+    }
+  }
+  int checkpoint(int x, int y) {
+    if (x < WIDTH && x >= 0 && y < HEIGHT && y >= 0)
+      return array[y][x];
+    else
+      return -1;
+  }
+  //Function calls to check specific points
+  int checkup(int x, int y) {
+    if (y > 0)
+      return array[y-1][x];
+    else
+      return -1;
+  }
+  int checkdown(int x, int y) {
+    if (y < HEIGHT - 1)
+      return array[y+1][x];
+    else
+      return -1;
+  }
+  int checkleft(int x, int y) {
+    if (x > 0)
+      return array[y][x-1];
+    else
+      return -1;
+  }
+  int checkright(int x, int y) {
+    if (x < WIDTH - 1)
+      return array[y][x+1];
+    else
+      return -1;
+  }
+  //Function calls to move specific points
+  void moveup(int x, int y) {
+    Serial.print("Moving up ");
+    Serial.print(x);
+    Serial.print(",");
+    Serial.print(y);
+    Serial.print(" to ");
+    Serial.print(x);
+    Serial.print(",");
+    Serial.print(y-1);
+    Serial.print(" containing ");
+    Serial.print(checkpoint(x, y));
+    Serial.print("\n");
+    swap(array[y][x], array[y-1][x]);
+  }
+  void movedown(int x, int y) {
+    Serial.print("Moving down ");
+    Serial.print(x);
+    Serial.print(",");
+    Serial.print(y);
+    Serial.print(" to ");
+    Serial.print(x);
+    Serial.print(",");
+    Serial.print(y+1);
+    Serial.print(" containing ");
+    Serial.print(checkpoint(x, y));
+    Serial.print("\n");
+    swap(array[y][x], array[y+1][x]);
+  }
+  void moveleft(int x, int y) {
+    Serial.print("Moving left ");
+    Serial.print(x);
+    Serial.print(",");
+    Serial.print(y);
+    Serial.print(" to ");
+    Serial.print(x-1);
+    Serial.print(",");
+    Serial.print(y);
+    Serial.print(" containing ");
+    Serial.print(checkpoint(x, y));
+    Serial.print("\n");
+    swap(array[y][x], array[y][x-1]);
+  }
+  void moveright(int x, int y) {
+    Serial.print("Moving right ");
+    Serial.print(x);
+    Serial.print(",");
+    Serial.print(y);
+    Serial.print(" to ");
+    Serial.print(x+1);
+    Serial.print(",");
+    Serial.print(y);
+    Serial.print(" containing ");
+    Serial.print(checkpoint(x, y));
+    Serial.print("\n");
+    swap(array[y][x], array[y][x+1]);
+  }
+  //Function calls to move pu around
+  void left() {
+    if (puyodone == false && halfy == false) {
+      if (pu.x1 != 0 && pu.x2 != 0) {
+        if ((pu.rot == 'd' || pu.rot == 'l') && checkleft(pu.x2, pu.y2) == 0){
+          moveleft(pu.x2, pu.y2);
+          moveleft(pu.x1, pu.y1);
+          pu.left();
+        }
+        if ((pu.rot == 'u' || pu.rot == 'r') && checkleft(pu.x1, pu.y1) == 0) {
+          moveleft(pu.x1, pu.y1);
+          moveleft(pu.x2, pu.y2);
+          pu.left();
+        }
+      }
+    }
+  }
+  void right() {
+    if (puyodone == false && halfy == false) {
+      if (pu.x1 != WIDTH && pu.x2 != WIDTH) {
+        if ((pu.rot == 'd' || pu.rot == 'r') && checkright(pu.x2, pu.y2) == 0){
+          moveright(pu.x2, pu.y2);
+          moveright(pu.x1, pu.y1);
+          pu.right();
+        }
+        else if ((pu.rot == 'u' || pu.rot == 'l') && checkright(pu.x1, pu.y1) == 0) {
+          moveright(pu.x1, pu.y1);
+          moveright(pu.x2, pu.y2);
+          pu.right();
+        }
+      }
+    }
+  }
+  int down() {
+    if (puyodone == false && halfy == false) {
+      if (pu.rot == 'l' || pu.rot == 'r') { //rotation is either left or right
+        if (checkdown(pu.x1, pu.y1) == 0 && checkdown(pu.x2, pu.y2) == 0) { //both puyo are clear
+          movedown(pu.x1, pu.y1);
+          movedown(pu.x2, pu.y2);
+          pu.down();
+        }
+        else { //one piece didn't clear
+          halfy = true;
+          if (checkdown(pu.x1, pu.y1) != 0) { //first puyo isn't clear
+            whichhalf = 1;
+            tempx = pu.x2;
+            tempy = pu.y2;
+          }
+          else {                              //second puyo isn't clear
+            whichhalf = 2;
+            tempx = pu.x1;
+            tempy = pu.y1;
+          }
+        }
+      }
+      else if (pu.rot == 'u' && checkdown(pu.x1, pu.y1) == 0) {
+        movedown(pu.x1, pu.y1);
+        movedown(pu.x2, pu.y2);
+        pu.down();
+      }
+      else if (pu.rot == 'd' && checkdown(pu.x2, pu.y2) == 0) {
+        movedown(pu.x2, pu.y2);
+        movedown(pu.x1, pu.y1);
+        pu.down();
+      }
+      else {
+        Serial.print("ouch\n");
+        puyodone = true;
+        return -1;
+      }
+    }
+    return 0;
+  }
+  void rotateleft() {
+    if (puyodone == false && halfy == false) {
+      switch (pu.rot) {
+      case 'u':
+        if (checkleft(pu.x2, pu.y2) == 0) {
+          moveleft(pu.x2, pu.y2);
+          pu.x2--;
+          movedown(pu.x2, pu.y2);
+          pu.y2++;
+          pu.rotateleft();
+        }
+        break;
+      case 'd':
+        if (checkright(pu.x2, pu.y2) == 0) {
+          moveright(pu.x2, pu.y2);
+          pu.x2++;
+          moveup(pu.x2, pu.y2);
+          pu.y2--;
+          pu.rotateleft();
+        }
+        break;
+      case 'l':
+        if (checkdown(pu.x2, pu.y2) == 0) {
+          movedown(pu.x2, pu.y2);
+          pu.y2++;
+          moveright(pu.x2, pu.y2);
+          pu.x2++;
+          pu.rotateleft();
+        }
+        break;
+      case 'r':
+        if (checkup(pu.x2, pu.y2) == 0) {
+          moveup(pu.x2, pu.y2);
+          pu.y2--;
+          moveleft(pu.x2, pu.y2);
+          pu.x2--;
+          pu.rotateleft();
+        }
+        break;
+      }
+      drawmatrix();
+    }
+  }
+  void rotateright() {
+    if (puyodone == false && halfy == false) {
+      switch (pu.rot) {
+      case 'u':
+        if (checkright(pu.x2, pu.y2) == 0) {
+          moveright(pu.x2, pu.y2);
+          pu.x2++;
+          movedown(pu.x2, pu.y2);
+          pu.y2++;
+          pu.rotateright();
+        }
+        break;
+      case 'd':
+        if (checkleft(pu.x2, pu.y2) == 0) {
+          moveleft(pu.x2, pu.y2);
+          pu.x2--;
+          moveup(pu.x2, pu.y2);
+          pu.y2--;
+          pu.rotateright();
+        }
+        break;
+      case 'l':
+        if (checkup(pu.x2, pu.y2) == 0) {
+          moveup(pu.x2, pu.y2);
+          pu.y2--;
+          moveright(pu.x2, pu.y2);
+          pu.x2++;
+          pu.rotateright();
+        }
+        break;
+      case 'r':
+        if (checkdown(pu.x2, pu.y2) == 0) {
+          movedown(pu.x2, pu.y2);
+          pu.y2++;
+          moveleft(pu.x2, pu.y2);
+          pu.x2--;
+          pu.rotateright();
+        }
+        break;
+      }
+      drawmatrix();
+    }
+  }
+};
+
+board test;
+volatile int loopn = 0;
+bool keepgoing = false;
+bool toggle = false;
+
+void setup() {
+  Serial.begin(9600);
+  matrix.begin();
+  //matrix.setBrightness(40);
+  pinMode(13, OUTPUT);  
+  Timer1.initialize(1000000); // set a timer of length 1000000 microseconds (or 1 sec - or 1Hz)
+  Timer1.attachInterrupt( Next ); // attach the service routine here
+}
+void loop() {
+  if (keepgoing == true && toggle) {
+    while (working == true) {
+    }
+    Timer1.stop();
+    test.rotateleft();
+    keepgoing = false;
+    Timer1.resume();
+  }
+    if (keepgoing == true &&! toggle) {
+    while (working == true) {
+    }
+    Timer1.stop();
+    test.rotateright();
+    keepgoing = false;
+    Timer1.resume();
+  }
+}
+
+void drawmatrix() {
+  for (int j = 0; j < HEIGHT; j++) {
+    for (int i =0; i < WIDTH; i++) {
+      //Serial.print(" ");
+      switch (test.checkpoint(i, j)) {
+      case 1:
+        matrix.drawPixel(i, j, colors[0]);
+        //Serial.print("r");
+        break;
+      case 2:
+        matrix.drawPixel(i, j, colors[1]);
+        //Serial.print("g");
+        break;
+      case 3:
+        matrix.drawPixel(i, j, colors[2]);
+        //Serial.print("b");
+        break;
+      default:
+        matrix.drawPixel(i, j, matrix.Color(0, 0, 0));
+        //Serial.print("_");
+      }
+    }
+    //Serial.print("\n");
+  }
+  matrix.show();
+}
+//recursive function to scan through same colors
+/*New solution, recursion uses too much memory
+stick starting tile location in delete array
+check directions around
+if same color, add them to neighbor array
+set a counter of how many neighbors were found
+add 1 to number of same color
+change tile to -1
+while neighbor array isn't empty
+  stack the tile location in delete array
+  check directions around
+  if same color, add them to the neighbor array
+  add to counter of how many neighbors were found matching same color
+  add 1 to number of same color
+once neighbor array is empty
+if number of same color is 4 or more
+  run through delete array coordinates and change their values all to zero
+  return number of same array
+else return number of neighbors found
+*/
+int scan(int x, int y, int sum) {
+  sum++;
+  int c = test.checkpoint(x, y);
+  test.setpoint(x, y, -1);
+  if (c == test.checkup(x, y)) {
+    //sum = sum + scan(x, y-1, sum);
+  }
+  if (c == test.checkdown(x, y)) {
+    //sum = sum + scan(x, y+1, sum);
+  }
+  if (c == test.checkleft(x, y)) {
+    //sum = sum + scan(x-1, y, sum);
+  }
+  if (c == test.checkright(x, y)) {
+    //sum = sum + scan(x+1, y, sum);
+  }
+  test.setpoint(x, y, c);
+  return sum;
+}
+void erase(int x, int y) {
+  test.setpoint(x, y, 0);
+  int c = test.checkpoint(x, y);
+  if (c == test.checkup(x, y)) {
+    //erase(x, y-1);
+  }
+  if (c == test.checkdown(x, y)) {
+    //erase(x, y+1);
+  }
+  if (c == test.checkleft(x, y)) {
+    //erase(x-1, y);
+  }
+  if (c == test.checkright(x, y)) {
+    //erase(x+1, y);
+  }
+}
+
+bool fallable() {
+  for (int j = HEIGHT - 1; j >= 0; j--) {
+    for (int i = 0; i < WIDTH; i++) {
+      if (test.checkpoint(i, j) != 0 && test.checkdown(i, j) == 0) {
+        Serial.print("fallable!!\n");
+        return true;
+      }
+    }
+  }
+  Serial.print("nofall\n");
+  return false;
+}
+
+void Next() {
+  working = true;
+  Serial.print("\n");
+  drawmatrix();
+  Serial.print("loop: ");
+  Serial.print(loopn);
+  loopn++;
+  Serial.print("  puyodone = ");
+  Serial.print(test.puyodone);
+  Serial.print(" halfy = ");
+  Serial.print(test.halfy);
+  Serial.print("\n");
+  //Move puyo down
+  if (test.puyodone == false && test.halfy == false) {
+    Serial.print(test.pu.rot);
+    Serial.print("\n");
+    Serial.print(test.pu.x1);
+    Serial.print(",");
+    Serial.print(test.pu.y1);
+    Serial.print(" ");
+    Serial.print(test.pu.color1);
+    Serial.print(test.checkpoint(test.pu.x1, test.pu.y1));
+    Serial.print(" puyo 1\n");
+    Serial.print(test.pu.x2);
+    Serial.print(",");
+    Serial.print(test.pu.y2);
+    Serial.print(" ");
+    Serial.print(test.pu.color2);    
+    Serial.print(test.checkpoint(test.pu.x2, test.pu.y2));
+    Serial.print(" puyo 2\n");
+    test.down();
+  }
+  //Move everything down by one step if possible starting from bottom row
+  else if (test.puyodone == true && test.halfy == false) { //only enter this if puyo is done moving
+    if (test.freefalling == true) {
+      for (int j = HEIGHT - 1; j >= 0; j--) {
+        for (int i = 0; i < WIDTH; i++) {
+          if (test.checkdown(i, j) == 0) {
+            test.movedown(i, j);
+          }
+        }
+      }
+      if (fallable() == false) {
+        test.freefalling = false;
+      }
+    }
+    //Do checks across the entire board to see if any matches
+    else {
+      int count;
+      int color;
+      test.combofound = false;
+      for (int j = HEIGHT - 1; j >= 0; j--) {
+        for (int i =0; i < WIDTH; i++) {
+          if (test.checkpoint(i, j) != 0) {
+            count = scan(i, j, 0);
+            if (count > 3) { //if there are 4 or more, incriment combo and do score stuff
+              test.combofound = true;
+              test.combo++;
+              test.score = test.score + test.combo * count;
+              erase(i, j);
+            }
+          }
+        }
+      }
+      if (test.combofound == true) {
+        test.freefalling = true;
+      }
+      else {
+        Serial.print("Resetting...\n");    
+        if (toggle) {
+          Serial.print("Setting to false\n");
+          toggle = false;
+        }
+        else {
+          Serial.print("Setting to true\n");
+          toggle = true;
+        }
+        keepgoing = true;
+        test.newpuyo(); //reset puyo to top
+      }
+    }
+  }
+  //one puyo got stuck during a down function call
+  else if (test.halfy == true) {
+    if (test.checkdown(test.tempx, test.tempy) == 0) { //there is space under the free puyo
+      test.movedown(test.tempx, test.tempy); //move the pixel down
+      test.tempy++; //adjust to compensate
+    }
+    else {                                   //no space under free puyo
+      test.puyodone = true;                  //no more movement possible. move to check for combos
+      test.halfy = false;
+    }
+  }
+  //drawmatrix();
+  working = false;
+}
+
