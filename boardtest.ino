@@ -7,9 +7,14 @@
 #endif
 
 #define PIN 13
-#define mright 2
+#define LEFT 2
+#define RIGHT 3 
+#define RLEFT 4
+#define RRIGHT 5
 #define WIDTH 6
+#define POT 0
 #define HEIGHT 12
+#define LEVEL 8
 
 // MATRIX DECLARATION:
 // Parameter 1 = width of NeoPixel matrix
@@ -41,9 +46,8 @@ Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(WIDTH, HEIGHT, PIN,
   NEO_MATRIX_ROWS + NEO_MATRIX_PROGRESSIVE,
   NEO_GRB            + NEO_KHZ800);
 
-
 const uint16_t colors[] = {
-  matrix.Color(100, 0, 0), matrix.Color(0, 100, 0), matrix.Color(0, 0, 100) };
+  matrix.Color(LEVEL, 0, 0), matrix.Color(0, LEVEL/2, 0), matrix.Color(0, 0, LEVEL) };
   
 volatile bool working = false;
 
@@ -324,6 +328,7 @@ public:
           pu.left();
         }
       }
+      drawmatrix();
     }
   }
   void right() {
@@ -340,6 +345,7 @@ public:
           pu.right();
         }
       }
+      drawmatrix();
     }
   }
   int down() {
@@ -380,6 +386,7 @@ public:
         return -1;
       }
     }
+    drawmatrix();
     return 0;
   }
   void rotateleft() {
@@ -474,21 +481,55 @@ board test;
 volatile int loopn = 0;
 bool keepgoing = false;
 bool toggle = false;
-
+bool left;
+bool right;
+bool oldleft = false;
+bool oldright = false;
 void setup() {
-  //Serial.begin(9600);
+  Serial.begin(9600);
   matrix.begin();
   //matrix.setBrightness(40);
-  pinMode(13, OUTPUT);  
-  Timer1.initialize(250000); // set a timer of length 1000000 microseconds (or 1 sec - or 1Hz)
+  pinMode(PIN, OUTPUT);
+  pinMode(LEFT, INPUT);
+  pinMode(RIGHT, INPUT);
+  pinMode(RLEFT, INPUT);
+  pinMode(RRIGHT, INPUT);
+  Timer1.initialize(map(analogRead(0), 0, 1023, 250000, 1000000)); // set a timer of length 250000 microseconds (or 1/4 sec)
   Timer1.attachInterrupt( Next ); // attach the service routine here
+  test.setpoint(0, 11, 'r');
+  test.setpoint(1, 11, 'b');
+  test.setpoint(2, 11, 'b');
+  test.setpoint(3, 11, 'g');
+  test.setpoint(4, 11, 'b');
+  test.setpoint(5, 11, 'r');
+  test.setpoint(0, 10, 'r');
+  test.setpoint(1, 10, 'r');
+  test.setpoint(2, 10, 'b');
+  test.setpoint(3, 10, 'r');
+  test.setpoint(4, 10, 'b');
+  test.setpoint(5, 10, 'r');
+  test.setpoint(0, 9, 'b');
+  test.setpoint(1, 9, 'r');
+  test.setpoint(2, 9, 'r');
+  test.setpoint(3, 9, 'r');
+  test.setpoint(4, 9, 'b');
+  test.setpoint(5, 9, 'r');
+  test.setpoint(0, 8, 'g');
+  test.setpoint(1, 8, 'g');
+  test.setpoint(2, 8, 'g');
+  test.setpoint(3, 8, 'b');
+  test.setpoint(4, 8, 'b');
+  test.setpoint(5, 8, 'r');
+  test.setpoint(4, 7, 'r');
+  test.setpoint(5, 7, 'r');
 }
 void loop() {
-  if (keepgoing == true && toggle && test.gameover == false) {
+  /*if (keepgoing == true && toggle && test.gameover == false) {
     while (working == true) {
     }
     Timer1.stop();
     test.rotateleft();
+    test.right();
     keepgoing = false;
     Timer1.resume();
   }
@@ -497,7 +538,40 @@ void loop() {
     }
     Timer1.stop();
     test.rotateright();
+    test.left();
+    test.left();
     keepgoing = false;
+    Timer1.resume();
+  }*/
+  delay(10);
+  left = digitalRead(LEFT);
+  right = digitalRead(RIGHT);
+  if (oldleft == true && left == false) {
+    oldleft = false;
+  }
+  if (oldright == true && right == false) {
+    oldright = false;
+  }
+  else if (left == 1) {
+    while (working == true) {
+    }
+    Timer1.stop();
+    if (oldleft == false) {
+      test.left();
+      oldleft = true;
+      oldright = false;
+    }
+    Timer1.resume();
+  }
+  else if (digitalRead(RIGHT) == 1) {
+    while (working == true) {
+    }
+    Timer1.stop();
+    if (oldright == false) {
+      test.right();
+      oldright = true;
+      oldleft = false;
+    }
     Timer1.resume();
   }
 }
@@ -506,7 +580,8 @@ void drawmatrix() {
   for (int j = 0; j < HEIGHT; j++) {
     for (int i =0; i < WIDTH; i++) {
       //Serial.print(" ");
-      switch (test.checkpoint(i, j)) {
+      int color = test.checkpoint(i, j);
+      switch (color) {
       case 1:
         matrix.drawPixel(i, j, colors[0]);
         //Serial.print("r");
@@ -725,6 +800,5 @@ void Next() {
       test.halfy = false;
     }
   }
-  //drawmatrix();
   working = false;
 }
