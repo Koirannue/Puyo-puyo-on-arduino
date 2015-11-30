@@ -11,6 +11,7 @@
 #define RIGHT 3 
 #define RLEFT 4
 #define RRIGHT 5
+#define DOWN 6
 #define WIDTH 6
 #define POT 0
 #define HEIGHT 12
@@ -24,7 +25,7 @@
 //   NEO_MATRIX_TOP, NEO_MATRIX_BOTTOM, NEO_MATRIX_LEFT, NEO_MATRIX_RIGHT:
 //     Position of the FIRST LED in the matrix; pick two, e.g.
 //     NEO_MATRIX_TOP + NEO_MATRIX_LEFT for the top-left corner.
-//   NEO_MATRIX_ROWS, NEO_MATRIX_COLUMNS: LEDs are arranged in horizontal
+//   NEO_MATRIX_ROWS, NEO_MATRIX_COLUMNS: LEDs are arranged in horizontalz`
 //     rows or in vertical columns, respectively; pick one or the other.
 //   NEO_MATRIX_PROGRESSIVE, NEO_MATRIX_ZIGZAG: all rows/columns proceed
 //     in the same order, or alternate lines reverse direction; pick one.
@@ -46,8 +47,9 @@ Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(WIDTH, HEIGHT, PIN,
   NEO_MATRIX_ROWS + NEO_MATRIX_PROGRESSIVE,
   NEO_GRB            + NEO_KHZ800);
 
+const int ncolors = 4;
 const uint16_t colors[] = {
-  matrix.Color(LEVEL, 0, 0), matrix.Color(0, LEVEL/2, 0), matrix.Color(0, 0, LEVEL) };
+  matrix.Color(0, 0, 0), matrix.Color(LEVEL, 0, 0), matrix.Color(0, LEVEL/2, 0), matrix.Color(0, 0, LEVEL), matrix.Color(LEVEL, 0, LEVEL)};
   
 volatile bool working = false;
 
@@ -66,8 +68,8 @@ public:
     x2 = WIDTH/2;
     y2 = 1;
     rot = 'd';
-    color1 = random(1,4);
-    color2 = random(1,4);
+    color1 = random(1,ncolors + 1);
+    color2 = random(1,ncolors + 1);
   }
   void reset() {
     x1 = WIDTH/2;
@@ -75,8 +77,8 @@ public:
     x2 = WIDTH/2;
     y2 = 1;
     rot = 'd';
-    color1 = random(1,4);
-    color2 = random(1,4);
+    color1 = random(1,ncolors + 1);
+    color2 = random(1,ncolors + 1);
   }
   //x and y can be any int
   //rot can be 'd', 'r', 'l', 'u'
@@ -190,28 +192,12 @@ public:
       //Serial.print("Gameover\n");
       gameover = true;
       Timer1.stop();
+      gameoverrun();
     }
   }
   void drawpu() {
     setpoint(pu.x1, pu.y1, pu.color1);
     setpoint(pu.x2, pu.y2, pu.color2);
-  }
-  void setpoint(int x, int y, char c) {
-    if (x < WIDTH && x >= 0 && y < HEIGHT && y >= 0) {
-      switch (c) {
-      case 'r':
-        array[y][x] = 1;
-        break;
-      case 'g':
-        array[y][x] = 2;
-        break;
-      case 'b':
-        array[y][x] = 3;
-        break;
-      default:
-        array[y][x] = 0;
-      }
-    }
   }
   void setpoint(int x, int y, int c) {
     if (x < WIDTH && x >= 0 && y < HEIGHT && y >= 0) {
@@ -386,7 +372,7 @@ public:
         return -1;
       }
     }
-    drawmatrix();
+    //drawmatrix();
     return 0;
   }
   void rotateleft() {
@@ -485,6 +471,12 @@ bool left;
 bool right;
 bool oldleft = false;
 bool oldright = false;
+bool rleft;
+bool rright;
+bool oldrleft = false;
+bool oldrright = false;
+bool down;
+int tick = 0;
 void setup() {
   Serial.begin(9600);
   matrix.begin();
@@ -494,112 +486,117 @@ void setup() {
   pinMode(RIGHT, INPUT);
   pinMode(RLEFT, INPUT);
   pinMode(RRIGHT, INPUT);
-  Timer1.initialize(map(analogRead(0), 0, 1023, 250000, 1000000)); // set a timer of length 250000 microseconds (or 1/4 sec)
+  Timer1.initialize(map(analogRead(0), 0, 1023, 100000, 1000000)); // set a timer of length 250000 microseconds (or 1/4 sec)
   Timer1.attachInterrupt( Next ); // attach the service routine here
-  test.setpoint(0, 11, 'r');
-  test.setpoint(1, 11, 'b');
-  test.setpoint(2, 11, 'b');
-  test.setpoint(3, 11, 'g');
-  test.setpoint(4, 11, 'b');
-  test.setpoint(5, 11, 'r');
-  test.setpoint(0, 10, 'r');
-  test.setpoint(1, 10, 'r');
-  test.setpoint(2, 10, 'b');
-  test.setpoint(3, 10, 'r');
-  test.setpoint(4, 10, 'b');
-  test.setpoint(5, 10, 'r');
-  test.setpoint(0, 9, 'b');
-  test.setpoint(1, 9, 'r');
-  test.setpoint(2, 9, 'r');
-  test.setpoint(3, 9, 'r');
-  test.setpoint(4, 9, 'b');
-  test.setpoint(5, 9, 'r');
-  test.setpoint(0, 8, 'g');
-  test.setpoint(1, 8, 'g');
-  test.setpoint(2, 8, 'g');
-  test.setpoint(3, 8, 'b');
-  test.setpoint(4, 8, 'b');
-  test.setpoint(5, 8, 'r');
-  test.setpoint(4, 7, 'r');
-  test.setpoint(5, 7, 'r');
+  test.setpoint(0, 11, 1);
+  test.setpoint(1, 11, 3);
+  test.setpoint(2, 11, 3);
+  test.setpoint(3, 11, 2);
+  test.setpoint(4, 11, 3);
+  test.setpoint(5, 11, 1);
+  test.setpoint(0, 10, 1);
+  test.setpoint(1, 10, 1);
+  test.setpoint(2, 10, 3);
+  test.setpoint(3, 10, 1);
+  test.setpoint(4, 10, 3);
+  test.setpoint(5, 10, 1);
+  test.setpoint(0, 9, 3);
+  test.setpoint(1, 9, 1);
+  test.setpoint(2, 9, 1);
+  test.setpoint(3, 9, 1);
+  test.setpoint(4, 9, 3);
+  test.setpoint(5, 9, 1);
+  test.setpoint(0, 8, 2);
+  test.setpoint(1, 8, 2);
+  test.setpoint(2, 8, 2);
+  test.setpoint(3, 8, 3);
+  test.setpoint(4, 8, 3);
+  test.setpoint(5, 8, 1);
+  test.setpoint(4, 7, 1);
+  test.setpoint(5, 7, 1);
 }
 void loop() {
-  /*if (keepgoing == true && toggle && test.gameover == false) {
-    while (working == true) {
-    }
-    Timer1.stop();
-    test.rotateleft();
-    test.right();
-    keepgoing = false;
-    Timer1.resume();
-  }
-    if (keepgoing == true &&! toggle) {
-    while (working == true) {
-    }
-    Timer1.stop();
-    test.rotateright();
-    test.left();
-    test.left();
-    keepgoing = false;
-    Timer1.resume();
-  }*/
-  delay(10);
-  left = digitalRead(LEFT);
-  right = digitalRead(RIGHT);
-  if (oldleft == true && left == false) {
-    oldleft = false;
-  }
-  if (oldright == true && right == false) {
-    oldright = false;
-  }
-  else if (left == 1) {
-    while (working == true) {
-    }
-    Timer1.stop();
-    if (oldleft == false) {
-      test.left();
-      oldleft = true;
-      oldright = false;
-    }
-    Timer1.resume();
-  }
-  else if (digitalRead(RIGHT) == 1) {
-    while (working == true) {
-    }
-    Timer1.stop();
-    if (oldright == false) {
-      test.right();
-      oldright = true;
+  while(test.gameover == false) {
+    delay(10);
+    tick++;
+    left = digitalRead(LEFT);
+    right = digitalRead(RIGHT);
+    rleft = digitalRead(RLEFT);
+    rright = digitalRead(RRIGHT);
+    down = digitalRead(DOWN);
+    if (oldleft == true && left == false) {
       oldleft = false;
     }
-    Timer1.resume();
+    if (oldright == true && right == false) {
+      oldright = false;
+    }
+    if (oldrleft == true && rleft == false) {
+      oldrleft = false;
+    }
+    if (oldrright == true && rright == false) {
+      oldrright = false;
+    }
+    if (left == 1) {
+      while (working == true) {
+      }
+      Timer1.stop();
+      if (oldleft == false) {
+        test.left();
+        oldleft = true;
+        oldright = false;
+      }
+      Timer1.resume();
+    }
+    if (right == 1) {
+      while (working == true) {
+      }
+      Timer1.stop();
+      if (oldright == false) {
+        test.right();
+        oldright = true;
+        oldleft = false;
+      }
+      Timer1.resume();
+    }
+    if (rleft == 1) {
+      while (working == true) {
+      }
+      Timer1.stop();
+      if (oldrleft == false) {
+        test.rotateleft();
+        oldrleft = true;
+        oldrright = false;
+      }
+      Timer1.resume();
+    }
+    if (rright == 1) {
+      while (working == true) {
+        }
+      Timer1.stop();
+      if (oldrright == false) {
+        test.rotateright();
+        oldrright = true;
+        oldrleft = false;
+      }
+      Timer1.resume();
+    }
+    if (down == 1 && tick > 10) {
+      while (working == true) {
+        }
+      Timer1.stop();
+      test.down();
+      drawmatrix();
+      tick = 0;
+      Timer1.resume();
+    }
   }
 }
-
+  
 void drawmatrix() {
   for (int j = 0; j < HEIGHT; j++) {
     for (int i =0; i < WIDTH; i++) {
-      //Serial.print(" ");
-      int color = test.checkpoint(i, j);
-      switch (color) {
-      case 1:
-        matrix.drawPixel(i, j, colors[0]);
-        //Serial.print("r");
-        break;
-      case 2:
-        matrix.drawPixel(i, j, colors[1]);
-        //Serial.print("g");
-        break;
-      case 3:
-        matrix.drawPixel(i, j, colors[2]);
-        //Serial.print("b");
-        break;
-      default:
-        matrix.drawPixel(i, j, matrix.Color(0, 0, 0));
-        //Serial.print("_");
-      }
+      matrix.drawPixel(i, j, colors[test.checkpoint(i, j)]);
     }
-    //Serial.print("\n");
   }
   matrix.show();
 }
@@ -645,12 +642,10 @@ int scan(int x, int y) {
     delpos++; //Increase delete array size by one
     test.setpoint(x, y, -1);  //Set current point to -1 flag
   }
-  if (delpos < 4) { //Not enough neighbors were found
-    for (int i = 0; i < delpos; i++) {
-      test.setpoint(delx[i], dely[i], color); //Reset color to what it was before
-    }
+  for (int i = 0; i < delpos; i++) {
+    test.setpoint(delx[i], dely[i], color); //Reset color to what it was before
   }
-  else {  //Enough neighbors were found
+  if (delpos >= 4) { //Not enough neighbors were found {  //Enough neighbors were found
     for (int i = 0; i < delpos; i++) {
       test.setpoint(delx[i], dely[i], 0); //Set them to 0 to erase them
     }
@@ -706,6 +701,17 @@ bool fallable() {
   }
   //Serial.print("falling done\n");
   return false;
+}
+
+void gameoverrun() {
+  for (int j = HEIGHT; j >= 0; j--) {
+    for (int i = 0; i < WIDTH; i++) {
+      test.setpoint(i, j, 0);
+      matrix.drawPixel(i, j, colors[0]);
+      matrix.show();
+      delay(10);
+    }
+  }
 }
 
 void Next() {
