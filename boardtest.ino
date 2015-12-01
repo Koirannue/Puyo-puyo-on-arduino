@@ -715,7 +715,8 @@ void gameoverrun() {
 }
 
 void Next() {
-  //Serial.print("\n");
+  Serial.print(test.score);
+  Serial.print("\n");
   working = true;
   drawmatrix();
   /*Serial.print("loop: ");
