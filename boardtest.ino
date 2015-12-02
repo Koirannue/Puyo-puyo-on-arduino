@@ -2,6 +2,8 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_NeoMatrix.h>
 #include <Adafruit_NeoPixel.h>
+#include<rgb_lcd.h>;
+
 #ifndef PSTR
  #define PSTR // Make Arduino Due happy
 #endif
@@ -15,7 +17,7 @@
 #define WIDTH 6
 #define POT 0
 #define HEIGHT 12
-#define LEVEL 8
+#define LEVEL 64
 
 // MATRIX DECLARATION:
 // Parameter 1 = width of NeoPixel matrix
@@ -47,6 +49,8 @@ Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(WIDTH, HEIGHT, PIN,
   NEO_MATRIX_ROWS + NEO_MATRIX_PROGRESSIVE,
   NEO_GRB            + NEO_KHZ800);
 
+void gameoverrun();
+void drawmatrix();
 const int ncolors = 4;
 const uint16_t colors[] = {
   matrix.Color(0, 0, 0), matrix.Color(LEVEL, 0, 0), matrix.Color(0, LEVEL/2, 0), matrix.Color(0, 0, LEVEL), matrix.Color(LEVEL, 0, LEVEL)};
@@ -462,7 +466,7 @@ public:
     }
   }
 };
-
+rgb_lcd lcd;
 board test;
 volatile int loopn = 0;
 bool keepgoing = false;
@@ -479,6 +483,9 @@ bool down;
 int tick = 0;
 void setup() {
   Serial.begin(9600);
+  lcd.begin(16, 2);
+  lcd.setRGB(255, 0, 0);
+  lcd.print("hi");
   matrix.begin();
   //matrix.setBrightness(40);
   pinMode(PIN, OUTPUT);
